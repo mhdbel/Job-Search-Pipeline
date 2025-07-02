@@ -1,0 +1,24 @@
+# config/config.yaml
+scraping:
+  job_boards:
+    - url: "https://www.indeed.com/jobs "
+      query_params:
+        q: "software engineer"
+        l: "New York"
+    - url: "https://www.linkedin.com/jobs "
+      query_params:
+        keywords: "data scientist"
+        location: "San Francisco"
+
+cloud:
+  storage_bucket: "gs://your-bucket-name"
+  pdf_destination: "output/jobs_report.pdf"
+
+email:
+  sender: "your-email@gmail.com"
+  recipients:
+    - "recipient1@example.com"
+    - "recipient2@example.com"
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_password: "your-email-password"
