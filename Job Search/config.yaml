@@ -1,0 +1,28 @@
+# Job Scraper and Notification Pipeline Configuration
+
+# Scraping configuration for job boards
+scraping:
+  job_boards:
+    - url: "https://www.indeed.com/jobs "
+      query_params:
+        q: "software engineer"       # Job title to search for
+        l: "New York"                # Location to search in
+    - url: "https://www.linkedin.com/jobs "
+      query_params:
+        keywords: "data scientist"   # Job title to search for
+        location: "San Francisco"    # Location to search in
+
+# Cloud storage configuration (optional, currently unused)
+cloud:
+  storage_bucket: "gs://your-bucket-name"  # Replace with your Google Cloud Storage bucket name
+  pdf_destination: "output/jobs_report.pdf"  # Path to save the generated PDF report
+
+# Email notification configuration
+email:
+  sender: "your-real-email@gmail.com"  # Replace with your Gmail address
+  recipients:
+    - "recipient1@example.com"         # Replace with recipient email addresses
+    - "recipient2@example.com"
+  smtp_server: "smtp.gmail.com"        # SMTP server for Gmail
+  smtp_port: 587                       # SMTP port for Gmail (TLS)
+  smtp_password: "your-app-password-or-real-password"  # Replace with your Gmail password or App Password
