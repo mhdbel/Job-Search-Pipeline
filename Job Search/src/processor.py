@@ -1,29 +1,31 @@
 import logging
-import re # For potential regex use in normalization
-# from bs4 import BeautifulSoup # If HTML cleaning is needed for job descriptions
+import re
+import numpy as np
+from sentence_transformers import SentenceTransformer
+import faiss  # For local vector database
+# from pinecone import Pinecone  # Uncomment if using Pinecone
 
 logger = logging.getLogger(__name__)
+
+# Load embedding model
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def normalize_text(text):
     """Basic text normalization: lowercase and remove extra whitespace."""
     if not isinstance(text, str):
         return ""
     text = text.lower().strip()
-    text = re.sub(r'\s+', ' ', text) # Replace multiple spaces with single
+    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with single
     return text
 
 def create_job_fingerprint(job):
     """Creates a comparable fingerprint for a job to identify duplicates."""
-    # A tuple of key fields, normalized, can serve as a fingerprint.
-    # Ensure fields exist and are strings before normalizing.
     title = normalize_text(job.get('title', ''))
     company = normalize_text(job.get('company', ''))
-    # Link might be too variable if it includes tracking params, but useful if canonical.
-    # For now, focusing on title and company for deduplication.
-    # Add more fields if necessary for uniqueness, e.g., location, or a snippet of description.
     return (title, company)
 
 def clean_data(jobs):
+    """Cleans and deduplicates job data."""
     if not isinstance(jobs, list):
         logger.error("clean_data expects a list of job data.")
         return []
@@ -36,21 +38,13 @@ def clean_data(jobs):
             logger.warning(f"Skipping non-dictionary item in jobs list: {job}")
             continue
 
-        # 1. Basic Validation (ensure essential fields are somewhat present)
-        #    Adjust required_fields as necessary for your data source.
+        # Basic Validation
         required_fields = ['title', 'company', 'link']
         if not all(job.get(field) for field in required_fields):
             logger.warning(f"Skipping job with missing essential fields: {job.get('title', 'N/A')} at {job.get('company', 'N/A')}")
             continue
 
-        # 2. Normalization (example: job titles, company names)
-        #    This is a placeholder. More sophisticated normalization might be needed.
-        #    For example, you might want to normalize 'Software Engineer' and 'SW Eng.' to the same value.
-        # job['title'] = normalize_text(job.get('title', ''))
-        # job['company'] = normalize_text(job.get('company', ''))
-        # Note: Modifying job dict directly. If the original is needed, copy first: job = job.copy()
-
-        # 3. Deduplication (more efficient)
+        # Deduplication
         fingerprint = create_job_fingerprint(job)
         if fingerprint not in seen_fingerprints:
             seen_fingerprints.add(fingerprint)
@@ -58,11 +52,55 @@ def clean_data(jobs):
         else:
             logger.info(f"Duplicate job found and removed: {job.get('title')} at {job.get('company')}")
 
-    # 4. Filtering Irrelevant Jobs (Placeholder)
-    #    Example: Filter out jobs with 'intern' in title if not desired.
-    # final_jobs = [job for job in cleaned_jobs if 'intern' not in job.get('title', '').lower()]
-    # For now, returning cleaned_jobs without this filter.
-    final_jobs = cleaned_jobs
+    logger.info(f"Original job count: {len(jobs)}, Cleaned job count: {len(cleaned_jobs)}")
+    return cleaned_jobs
 
-    logger.info(f"Original job count: {len(jobs)}, Cleaned job count: {len(final_jobs)}")
-    return final_jobs
+def generate_embeddings(jobs):
+    """Generates embeddings for job descriptions."""
+    descriptions = [normalize_text(job.get('description', '')) for job in jobs]
+    embeddings = embedding_model.encode(descriptions)
+    return embeddings
+
+def index_jobs_in_faiss(jobs):
+    """Indexes jobs in a FAISS vector database."""
+    embeddings = generate_embeddings(jobs)
+    dimension = embeddings.shape[1]  # Dimensionality of embeddings
+    index = faiss.IndexFlatL2(dimension)  # L2 distance for similarity search
+    index.add(np.array(embeddings))
+
+    # Store job metadata separately
+    job_metadata = {i: job for i, job in enumerate(jobs)}
+    logger.info(f"Indexed {len(jobs)} jobs into FAISS.")
+    return index, job_metadata
+
+# Example usage for Pinecone (optional)
+# def index_jobs_in_pinecone(jobs, api_key, index_name):
+#     pinecone.init(api_key=api_key, environment="us-west1-gcp")
+#     if index_name not in pinecone.list_indexes():
+#         pinecone.create_index(index_name, dimension=384)  # Adjust dimension based on model
+#     index = pinecone.Index(index_name)
+#
+#     embeddings = generate_embeddings(jobs)
+#     ids = [str(i) for i in range(len(jobs))]
+#     metadata = [{key: job[key] for key in job} for job in jobs]
+#     to_upsert = [(ids[i], embeddings[i].tolist(), metadata[i]) for i in range(len(jobs))]
+#     index.upsert(to_upsert)
+#     logger.info(f"Indexed {len(jobs)} jobs into Pinecone.")
+#     return index
+
+if __name__ == "__main__":
+    # Example usage
+    jobs = [
+        {"title": "Python Developer", "company": "Company A", "description": "We are looking for a Python developer...", "link": "https://example.com/job/123 "},
+        {"title": "Data Scientist", "company": "Company B", "description": "Seeking a data scientist with expertise in ML...", "link": "https://example.com/job/456 "}
+    ]
+    cleaned_jobs = clean_data(jobs)
+    index, job_metadata = index_jobs_in_faiss(cleaned_jobs)
+
+    # Test querying (example)
+    query = "Find me remote Python developer jobs."
+    query_embedding = embedding_model.encode(normalize_text(query))
+    distances, indices = index.search(np.array([query_embedding]), k=2)
+    print("Retrieved jobs:")
+    for idx in indices[0]:
+        print(job_metadata[idx])
