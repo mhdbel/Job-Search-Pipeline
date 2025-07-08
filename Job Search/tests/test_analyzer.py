@@ -1,6 +1,7 @@
 import unittest
 import logging
-from Job_Search.src.analyzer import analyze_jobs # Adjusted import path
+from Job_Search.src.analyzer import analyze_jobs, hybrid_search  # Updated imports
+from Job_Search.src.processor import clean_data, index_jobs_in_faiss  # For indexing jobs
 
 # Configure logging to be quiet during tests, unless specifically needed for a test
 logging.basicConfig(level=logging.CRITICAL)
@@ -35,7 +36,7 @@ class TestAnalyzer(unittest.TestCase):
     def test_analyze_jobs_missing_applicants_key(self):
         """Test jobs where the 'applicants' key is missing (should default to 0)."""
         jobs = [
-            {'title': 'Intern', 'company': 'Big Firm', 'id': 'job5'}, # Missing 'applicants'
+            {'title': 'Intern', 'company': 'Big Firm', 'id': 'job5'},  # Missing 'applicants'
             {'title': 'Senior Developer', 'company': 'Tech Corp', 'applicants': 15, 'id': 'job1'}
         ]
         # The intern job (default applicants 0) should be considered interesting.
@@ -87,6 +88,45 @@ class TestAnalyzer(unittest.TestCase):
             result = analyze_jobs(jobs)
             self.assertEqual(result, expected_interesting_jobs)
             self.assertTrue(any("Skipping non-dictionary job item" in log_msg for log_msg in cm.output))
+
+    # New Tests for Hybrid Search
+    def test_hybrid_search_retrieves_relevant_jobs(self):
+        """Test hybrid search retrieves relevant jobs based on a query."""
+        jobs = [
+            {"title": "Python Developer", "company": "Company A", "description": "We are looking for a Python developer...", "link": "https://example.com/job/123 "},
+            {"title": "Data Scientist", "company": "Company B", "description": "Seeking a data scientist with expertise in ML...", "link": "https://example.com/job/456 "}
+        ]
+
+        # Clean and index jobs
+        cleaned_jobs = clean_data(jobs)
+        index, job_metadata = index_jobs_in_faiss(cleaned_jobs)
+
+        # Perform hybrid search
+        query = "Find me remote Python developer jobs."
+        relevant_jobs = hybrid_search(query, cleaned_jobs, index, top_k=2)
+
+        # Validate results
+        self.assertEqual(len(relevant_jobs), 2)
+        self.assertIn(relevant_jobs[0]["title"], ["Python Developer", "Data Scientist"])
+        self.assertIn(relevant_jobs[1]["title"], ["Python Developer", "Data Scientist"])
+
+    def test_hybrid_search_handles_empty_query(self):
+        """Test hybrid search handles an empty or irrelevant query gracefully."""
+        jobs = [
+            {"title": "Python Developer", "company": "Company A", "description": "We are looking for a Python developer...", "link": "https://example.com/job/123 "},
+            {"title": "Data Scientist", "company": "Company B", "description": "Seeking a data scientist with expertise in ML...", "link": "https://example.com/job/456 "}
+        ]
+
+        # Clean and index jobs
+        cleaned_jobs = clean_data(jobs)
+        index, job_metadata = index_jobs_in_faiss(cleaned_jobs)
+
+        # Perform hybrid search with an empty query
+        query = ""
+        relevant_jobs = hybrid_search(query, cleaned_jobs, index, top_k=2)
+
+        # Validate results
+        self.assertEqual(len(relevant_jobs), 0)
 
 if __name__ == '__main__':
     unittest.main()
