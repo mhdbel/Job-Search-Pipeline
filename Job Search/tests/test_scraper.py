@@ -6,7 +6,7 @@ from Job_Search.src.scraper import load_config, scrape_job_board, scrape_jobs
 
 # Determine the project root for test purposes, assuming tests are in Job_Search/tests/
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT_FOR_TESTS = os.path.dirname(TEST_DIR) # This should be 'Job_Search/'
+PROJECT_ROOT_FOR_TESTS = os.path.dirname(TEST_DIR)  # This should be 'Job_Search/'
 
 # This is the path that scraper.py will construct for its config file
 # We need to mock this path when testing load_config
@@ -14,11 +14,11 @@ EXPECTED_CONFIG_PATH_IN_SCRAPER = os.path.join(PROJECT_ROOT_FOR_TESTS, "config",
 
 class TestScraper(unittest.TestCase):
 
-    @patch('Job_Search.src.scraper.os.path.exists') # Target 'os.path.exists' as used in scraper.py
-    @patch('builtins.open', new_callable=mock_open) # Mock open for file reading
+    @patch('Job_Search.src.scraper.os.path.exists')  # Target 'os.path.exists' as used in scraper.py
+    @patch('builtins.open', new_callable=mock_open)  # Mock open for file reading
     def test_load_config_success(self, mock_file_open, mock_path_exists):
         """Test successful loading of configuration."""
-        mock_path_exists.return_value = True # Simulate config file exists
+        mock_path_exists.return_value = True  # Simulate config file exists
         mock_config_data = {
             'scraping': {
                 'job_boards': [{'url': 'http://example.com', 'query_params': {'q': 'test'}}]
@@ -36,7 +36,7 @@ class TestScraper(unittest.TestCase):
     @patch('Job_Search.src.scraper.os.path.exists')
     def test_load_config_file_not_found(self, mock_path_exists):
         """Test load_config when config file does not exist."""
-        mock_path_exists.return_value = False # Simulate config file does NOT exist
+        mock_path_exists.return_value = False  # Simulate config file does NOT exist
         # Expect load_config to print an error and return None
         with patch('builtins.print') as mock_print:
             config = load_config()
@@ -63,11 +63,25 @@ class TestScraper(unittest.TestCase):
         # Simulate HTML content - adjust class names to match scraper.py's expectations
         mock_response.text = """
         <html><body>
-            <div class='job-card'><h2>Software Engineer</h2><span class='company'>TestCo</span><a href='/job1'>Link</a></div>
-            <div class='job-card'><h2>Data Analyst</h2><span class='company'>AnotherCo</span><a href='http://example.com/job2'>Link</a></div>
+            <div class='job-card'>
+                <h2>Software Engineer</h2>
+                <span class='company'>TestCo</span>
+                <a href='/job1'>Link</a>
+                <span class='location'>Remote</span>
+                <ul class='skills-list'><li>Python</li><li>Django</li></ul>
+                <div class='description'>Looking for a Python developer...</div>
+            </div>
+            <div class='job-card'>
+                <h2>Data Analyst</h2>
+                <span class='company'>AnotherCo</span>
+                <a href='http://example.com/job2'>Link</a>
+                <span class='location'>New York, NY</span>
+                <ul class='skills-list'><li>R</li><li>SQL</li></ul>
+                <div class='description'>Seeking a data analyst...</div>
+            </div>
         </body></html>
         """
-        mock_response.raise_for_status = MagicMock() # Mock this method
+        mock_response.raise_for_status = MagicMock()  # Mock this method
         mock_requests_get.return_value = mock_response
         
         jobs = scrape_job_board('http://example.com/jobs', {'q': 'dev'})
@@ -77,7 +91,10 @@ class TestScraper(unittest.TestCase):
         self.assertEqual(len(jobs), 2)
         self.assertEqual(jobs[0]['title'], 'Software Engineer')
         self.assertEqual(jobs[0]['company'], 'TestCo')
-        self.assertEqual(jobs[0]['link'], '/job1') # Link handling might need refinement
+        self.assertEqual(jobs[0]['link'], 'http://example.com/job1')  # Relative URL resolved
+        self.assertEqual(jobs[0]['location'], 'Remote')
+        self.assertEqual(jobs[0]['skills'], ['Python', 'Django'])
+        self.assertEqual(jobs[0]['description'], 'Looking for a Python developer...')
         self.assertEqual(jobs[1]['title'], 'Data Analyst')
 
     @patch('Job_Search.src.scraper.requests.get')
@@ -132,8 +149,8 @@ class TestScraper(unittest.TestCase):
         }
         # Define what scrape_job_board returns for each call
         mock_scrape_board.side_effect = [
-            [{'title': 'Job1 from Board1'}], # First call to scrape_job_board
-            [{'title': 'Job2 from Board2'}]  # Second call
+            [{'title': 'Job1 from Board1', 'company': 'Company A', 'location': 'Remote'}],  # First call
+            [{'title': 'Job2 from Board2', 'company': 'Company B', 'location': 'San Francisco, CA'}]  # Second call
         ]
         
         all_jobs = scrape_jobs()
@@ -142,13 +159,13 @@ class TestScraper(unittest.TestCase):
         mock_scrape_board.assert_any_call('http://board1.com', {'q': 'eng'})
         mock_scrape_board.assert_any_call('http://board2.com', {'k': 'sci'})
         self.assertEqual(len(all_jobs), 2)
-        self.assertIn({'title': 'Job1 from Board1'}, all_jobs)
-        self.assertIn({'title': 'Job2 from Board2'}, all_jobs)
+        self.assertIn({'title': 'Job1 from Board1', 'company': 'Company A', 'location': 'Remote'}, all_jobs)
+        self.assertIn({'title': 'Job2 from Board2', 'company': 'Company B', 'location': 'San Francisco, CA'}, all_jobs)
 
     @patch('Job_Search.src.scraper.load_config')
     def test_scrape_jobs_config_load_fails(self, mock_load_cfg):
         """Test scrape_jobs when configuration loading fails."""
-        mock_load_cfg.return_value = None # Simulate config load failure
+        mock_load_cfg.return_value = None  # Simulate config load failure
         with patch('builtins.print') as mock_print:
             all_jobs = scrape_jobs()
             self.assertEqual(all_jobs, [])
@@ -161,25 +178,19 @@ class TestScraper(unittest.TestCase):
         mock_load_cfg.return_value = {
             'scraping': {
                 'job_boards': [
-                    {'query_params': {'q': 'eng'}}, # Missing URL
+                    {'query_params': {'q': 'eng'}},  # Missing URL
                     {'url': 'http://board2.com', 'query_params': {'k': 'sci'}}
                 ]
             }
         }
-        mock_scrape_board.return_value = [{'title': 'Job from Board2'}]
+        mock_scrape_board.return_value = [{'title': 'Job from Board2', 'company': 'Company C', 'location': 'Austin, TX'}]
         
         with patch('builtins.print') as mock_print:
             all_jobs = scrape_jobs()
             self.assertEqual(len(all_jobs), 1)
             self.assertEqual(all_jobs[0]['title'], 'Job from Board2')
-            mock_scrape_board.assert_called_once_with('http://board2.com', {'k': 'sci'}) # Only called for valid board
+            mock_scrape_board.assert_called_once_with('http://board2.com', {'k': 'sci'})  # Only called for valid board
             self.assertTrue(any("Missing URL for a job board" in call[0][0] for call in mock_print.call_args_list))
 
 if __name__ == '__main__':
-    # This is important for imports to work correctly when running the test file directly
-    # It adds the parent directory of 'Job_Search' to sys.path if not already there.
-    # However, a better way is to run tests using `python -m unittest discover` from parent of Job_Search
-    # or configure PYTHONPATH.
-    # For simplicity here, we assume the test runner handles paths, or Job_Search is in PYTHONPATH.
-    import requests # Make sure requests is imported for requests.exceptions.HTTPError
     unittest.main()
