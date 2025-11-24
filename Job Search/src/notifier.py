@@ -1,9 +1,12 @@
+import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Any, Dict
+
 from fpdf import FPDF
 
-def send_email(response, config):
+def send_email(response: str, config: Dict[str, Any]):
     """
     Sends an email with the LLM-generated response.
     
@@ -23,14 +26,18 @@ def send_email(response, config):
     try:
         server = smtplib.SMTP(config["email"]["smtp_server"], config["email"]["smtp_port"])
         server.starttls()
-        server.login(msg['From'], config["email"]["smtp_password"])
+        smtp_password = os.getenv("SMTP_PASSWORD", config["email"].get("smtp_password", ""))
+        if not smtp_password:
+            raise ValueError("SMTP password missing. Set SMTP_PASSWORD env var or email.smtp_password in config.")
+
+        server.login(msg['From'], smtp_password)
         server.sendmail(msg['From'], config["email"]["recipients"], msg.as_string())
         server.quit()
         print("Email notification sent successfully.")
     except Exception as e:
         print(f"Failed to send email: {e}")
 
-def create_pdf(response, config):
+def create_pdf(response: str, config: Dict[str, Any]):
     """
     Creates a PDF report with the LLM-generated response.
     
@@ -44,11 +51,14 @@ def create_pdf(response, config):
     pdf.set_font("Arial", size=12)
 
     # Add the LLM-generated response to the PDF
-    pdf.multi_cell(0, 10, txt=response)
+    for line in response.splitlines():
+        pdf.cell(0, 10, txt=line, ln=1)
 
     # Save the PDF to the specified destination
-    pdf.output(config["cloud"]["pdf_destination"])
-    print("PDF report created successfully.")
+    destination = config["cloud"]["pdf_destination"]
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    pdf.output(destination)
+    print(f"PDF report created successfully at {destination}.")
 
 def notify(response, config):
     """

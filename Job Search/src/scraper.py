@@ -1,30 +1,17 @@
-import requests
-from bs4 import BeautifulSoup
-import yaml
-import os
 import json
+import os
 from urllib.parse import urljoin
 
-# Determine the absolute path to the project root directory
-SRC_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SRC_DIR)
-CONFIG_FILE_PATH = os.path.join(PROJECT_ROOT, "config", "config.yaml")
+import requests
+from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter, Retry
 
-def load_config():
-    """Load configuration from the YAML file."""
-    if not os.path.exists(CONFIG_FILE_PATH):
-        print(f"Error: Configuration file not found at {CONFIG_FILE_PATH}")
-        return None
-    try:
-        with open(CONFIG_FILE_PATH, "r") as file:
-            return yaml.safe_load(file)
-    except yaml.YAMLError as e:
-        print(f"Error parsing YAML configuration: {e}")
-        return None
+from src.config import PROJECT_ROOT, load_config
 
 def save_jobs_to_file(jobs, output_file):
     """Save scraped jobs to a JSON file."""
     try:
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
         with open(output_file, "w") as file:
             json.dump(jobs, file, indent=4)
         print(f"Saved {len(jobs)} jobs to {output_file}")
@@ -91,13 +78,14 @@ def scrape_job_board(url, params):
 
 def scrape_jobs():
     """Scrape jobs from all configured job boards and save them to a file."""
-    config = load_config()
-    all_jobs = []
-    if not config or 'scraping' not in config or not isinstance(config.get('scraping', {}).get('job_boards'), list):
-        print("Error: Scraping configuration is missing, malformed, or 'job_boards' is not a list.")
+    try:
+        config = load_config()
+    except Exception as exc:  # pragma: no cover - explicit logging path
+        print(f"Error loading configuration: {exc}")
         return []
+    all_jobs = []
 
-    for board in config["scraping"]["job_boards"]:
+    for board in config.get("scraping", {}).get("job_boards", []):
         url = board.get("url")
         params = board.get("query_params")
         if not url:

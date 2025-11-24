@@ -1,20 +1,25 @@
+import os
+import sys
 import unittest
 from unittest.mock import patch, mock_open, MagicMock
 import yaml
-import os
-from Job_Search.src.scraper import load_config, scrape_job_board, scrape_jobs
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from src.config import DEFAULT_CONFIG_PATH, load_config
+from src.scraper import scrape_job_board, scrape_jobs
 
 # Determine the project root for test purposes, assuming tests are in Job_Search/tests/
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT_FOR_TESTS = os.path.dirname(TEST_DIR)  # This should be 'Job_Search/'
+PROJECT_ROOT_FOR_TESTS = os.path.dirname(TEST_DIR)
 
-# This is the path that scraper.py will construct for its config file
-# We need to mock this path when testing load_config
-EXPECTED_CONFIG_PATH_IN_SCRAPER = os.path.join(PROJECT_ROOT_FOR_TESTS, "config", "config.yaml")
+EXPECTED_CONFIG_PATH_IN_SCRAPER = DEFAULT_CONFIG_PATH
 
 class TestScraper(unittest.TestCase):
 
-    @patch('Job_Search.src.scraper.os.path.exists')  # Target 'os.path.exists' as used in scraper.py
+    @patch('src.config.os.path.exists')  # Target 'os.path.exists' as used in config.py
     @patch('builtins.open', new_callable=mock_open)  # Mock open for file reading
     def test_load_config_success(self, mock_file_open, mock_path_exists):
         """Test successful loading of configuration."""
@@ -30,10 +35,10 @@ class TestScraper(unittest.TestCase):
         config = load_config()
         
         mock_path_exists.assert_called_once_with(EXPECTED_CONFIG_PATH_IN_SCRAPER)
-        mock_file_open.assert_called_once_with(EXPECTED_CONFIG_PATH_IN_SCRAPER, 'r')
+        mock_file_open.assert_called_once_with(EXPECTED_CONFIG_PATH_IN_SCRAPER, 'r', encoding='utf-8')
         self.assertEqual(config, mock_config_data)
 
-    @patch('Job_Search.src.scraper.os.path.exists')
+    @patch('src.config.os.path.exists')
     def test_load_config_file_not_found(self, mock_path_exists):
         """Test load_config when config file does not exist."""
         mock_path_exists.return_value = False  # Simulate config file does NOT exist
@@ -43,7 +48,7 @@ class TestScraper(unittest.TestCase):
             self.assertIsNone(config)
             mock_print.assert_called_with(f"Error: Configuration file not found at {EXPECTED_CONFIG_PATH_IN_SCRAPER}")
 
-    @patch('Job_Search.src.scraper.os.path.exists')
+    @patch('src.config.os.path.exists')
     @patch('builtins.open', new_callable=mock_open)
     def test_load_config_yaml_error(self, mock_file_open, mock_path_exists):
         """Test load_config with invalid YAML content."""
@@ -55,7 +60,7 @@ class TestScraper(unittest.TestCase):
             self.assertIsNone(config)
             self.assertTrue(mock_print.call_args[0][0].startswith("Error parsing YAML configuration:"))
 
-    @patch('Job_Search.src.scraper.requests.get')
+    @patch('src.scraper.requests.get')
     def test_scrape_job_board_success(self, mock_requests_get):
         """Test successful scraping of a single job board."""
         mock_response = MagicMock()
@@ -97,7 +102,7 @@ class TestScraper(unittest.TestCase):
         self.assertEqual(jobs[0]['description'], 'Looking for a Python developer...')
         self.assertEqual(jobs[1]['title'], 'Data Analyst')
 
-    @patch('Job_Search.src.scraper.requests.get')
+    @patch('src.scraper.requests.get')
     def test_scrape_job_board_http_error(self, mock_requests_get):
         """Test scrape_job_board when an HTTP error occurs."""
         mock_response = MagicMock()
@@ -109,7 +114,7 @@ class TestScraper(unittest.TestCase):
             self.assertEqual(jobs, [])
             self.assertTrue(mock_print.call_args[0][0].startswith("Failed to fetch data from http://example.com/failing:"))
 
-    @patch('Job_Search.src.scraper.requests.get')
+    @patch('src.scraper.requests.get')
     def test_scrape_job_board_request_exception(self, mock_requests_get):
         """Test scrape_job_board with a general request exception."""
         mock_requests_get.side_effect = requests.exceptions.ConnectionError("Connection failed")
@@ -119,7 +124,7 @@ class TestScraper(unittest.TestCase):
             self.assertEqual(jobs, [])
             self.assertTrue(mock_print.call_args[0][0].startswith("Failed to fetch data from http://example.com/failing: Connection failed"))
 
-    @patch('Job_Search.src.scraper.requests.get')
+    @patch('src.scraper.requests.get')
     def test_scrape_job_board_no_jobs_found(self, mock_requests_get):
         """Test scrape_job_board when response is OK but no job elements are found."""
         mock_response = MagicMock()
@@ -135,8 +140,8 @@ class TestScraper(unittest.TestCase):
             self.assertTrue(any("No job elements found on http://example.com/nojobs" in call[0][0] for call in mock_print.call_args_list))
 
     # Mock load_config for scrape_jobs tests
-    @patch('Job_Search.src.scraper.load_config') 
-    @patch('Job_Search.src.scraper.scrape_job_board')
+    @patch('src.scraper.load_config')
+    @patch('src.scraper.scrape_job_board')
     def test_scrape_jobs_success(self, mock_scrape_board, mock_load_cfg):
         """Test scrape_jobs successfully scrapes from multiple configured boards."""
         mock_load_cfg.return_value = {
@@ -162,7 +167,7 @@ class TestScraper(unittest.TestCase):
         self.assertIn({'title': 'Job1 from Board1', 'company': 'Company A', 'location': 'Remote'}, all_jobs)
         self.assertIn({'title': 'Job2 from Board2', 'company': 'Company B', 'location': 'San Francisco, CA'}, all_jobs)
 
-    @patch('Job_Search.src.scraper.load_config')
+    @patch('src.scraper.load_config')
     def test_scrape_jobs_config_load_fails(self, mock_load_cfg):
         """Test scrape_jobs when configuration loading fails."""
         mock_load_cfg.return_value = None  # Simulate config load failure
@@ -171,8 +176,8 @@ class TestScraper(unittest.TestCase):
             self.assertEqual(all_jobs, [])
             self.assertTrue(any("Error: Scraping configuration is missing" in call[0][0] for call in mock_print.call_args_list))
 
-    @patch('Job_Search.src.scraper.load_config')
-    @patch('Job_Search.src.scraper.scrape_job_board')
+    @patch('src.scraper.load_config')
+    @patch('src.scraper.scrape_job_board')
     def test_scrape_jobs_board_url_missing(self, mock_scrape_board, mock_load_cfg):
         """Test scrape_jobs when a board URL is missing in config."""
         mock_load_cfg.return_value = {

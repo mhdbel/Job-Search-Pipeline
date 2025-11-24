@@ -1,6 +1,13 @@
+import os
+import sys
 import unittest
 from unittest.mock import patch, MagicMock
-from Job_Search.src.notifier import send_email, create_pdf, notify  # Updated imports
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from src.notifier import send_email, create_pdf, notify
 
 # Mock FPDF before it's used by notifier module when notifier is imported
 class MockFPDF:
@@ -30,7 +37,7 @@ class MockFPDF:
         self.auto_page_break = auto
 
 # Patch FPDF at the point where it's imported by the notifier module
-@patch('Job_Search.src.notifier.FPDF', MockFPDF)
+@patch('src.notifier.FPDF', MockFPDF)
 class TestNotifier(unittest.TestCase):
 
     def setUp(self):
@@ -51,7 +58,7 @@ class TestNotifier(unittest.TestCase):
             }
         }
 
-    @patch('Job_Search.src.notifier.smtplib.SMTP')
+    @patch('src.notifier.smtplib.SMTP')
     def test_send_email(self, mock_smtp_constructor):
         """Test the send_email function with an LLM-generated response."""
         mock_smtp_instance = MagicMock()  # Mock SMTP instance
@@ -86,7 +93,7 @@ class TestNotifier(unittest.TestCase):
 
     def test_create_pdf(self):
         """Test the create_pdf function with an LLM-generated response."""
-        with patch('Job_Search.src.notifier.FPDF', spec=True) as mock_fpdf_constructor:
+        with patch('src.notifier.FPDF', spec=True) as mock_fpdf_constructor:
             mock_pdf_instance = MagicMock()
             mock_fpdf_constructor.return_value = mock_pdf_instance
 
@@ -114,8 +121,8 @@ class TestNotifier(unittest.TestCase):
             # Validate PDF output path
             mock_pdf_instance.output.assert_called_once_with(self.sample_config['cloud']['pdf_destination'])
 
-    @patch('Job_Search.src.notifier.send_email')
-    @patch('Job_Search.src.notifier.create_pdf')
+    @patch('src.notifier.send_email')
+    @patch('src.notifier.create_pdf')
     def test_notify(self, mock_create_pdf, mock_send_email):
         """Test the notify function with an LLM-generated response."""
         notify(self.sample_response, self.sample_config)

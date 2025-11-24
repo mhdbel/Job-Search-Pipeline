@@ -1,12 +1,13 @@
 import os
 import sys
 
-# Add src to path to allow direct import if running script from Job_Search directory
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-from notifier import notify, create_pdf, send_email
-from scraper import load_config  # To load the actual config
-from logger import setup_logger
+from src.notifier import notify, create_pdf, send_email
+from src.scraper import load_config  # To load the actual config
+from src.logger import setup_logger
 
 if __name__ == '__main__':
     logger = setup_logger()

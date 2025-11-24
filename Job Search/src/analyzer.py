@@ -1,12 +1,9 @@
 import logging
-from rank_bm25 import BM25Okapi
-import numpy as np
-from sentence_transformers import SentenceTransformer
+from typing import List
+
+from src.processor import normalize_text, _embed_text
 
 logger = logging.getLogger(__name__)
-
-# Load embedding model for vector search
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def analyze_jobs(jobs):
     """Placeholder logic: Assume jobs with fewer than 10 applicants are 'interesting'."""
@@ -23,9 +20,13 @@ def analyze_jobs(jobs):
         applicants_raw = job.get("applicants")
         applicants = 0  # Default value
 
-        if applicants_raw is not None:
-            if isinstance(applicants_raw, int):
-                applicants = applicants_raw
+        if isinstance(applicants_raw, int):
+            applicants = applicants_raw
+        else:
+            if applicants_raw is not None:
+                logger.warning(
+                    f"Job ID '{job.get('id', 'N/A')}' has non-integer applicants value '{applicants_raw}'. Using default 0."
+                )
             else:
                 logger.warning(
                     f"Job ID '{job.get('id', 'N/A')}' has non-integer applicants value '{applicants_raw}'. Using default 0."
@@ -50,19 +51,36 @@ def hybrid_search(query, jobs, index, top_k=5):
     Returns:
         list: Top-k most relevant jobs.
     """
-    # Step 1: Keyword Filtering (BM25)
-    tokenized_descriptions = [job["description"].split() for job in jobs]
-    bm25 = BM25Okapi(tokenized_descriptions)
-    tokenized_query = query.split()
-    scores = bm25.get_scores(tokenized_query)
-    keyword_indices = np.argsort(scores)[::-1][:top_k]
+    if not isinstance(query, str) or not query.strip():
+        logger.warning("hybrid_search received an empty or non-string query; returning no results.")
+        return []
 
-    # Step 2: Vector Search (FAISS)
-    query_embedding = embedding_model.encode(query)
-    distances, vector_indices = index.search(np.array([query_embedding]), top_k)
+    if not jobs or index is None:
+        logger.warning("hybrid_search has no jobs or index to search against; returning no results.")
+        return []
+
+    normalized_query = normalize_text(query)
+
+    # Step 1: Keyword Filtering (simple overlap score)
+    tokenized_descriptions: List[List[str]] = []
+    for job in jobs:
+        description = normalize_text(job.get("description", ""))
+        tokenized_descriptions.append(description.split())
+
+    query_tokens = normalized_query.split()
+    keyword_scores = []
+    for tokens in tokenized_descriptions:
+        overlap = sum(1 for token in tokens if token in query_tokens)
+        keyword_scores.append(overlap)
+
+    keyword_indices = sorted(range(len(keyword_scores)), key=lambda i: keyword_scores[i], reverse=True)[:top_k]
+
+    # Step 2: Vector Search (SimpleIndex)
+    query_embedding = _embed_text(normalized_query)
+    distances, vector_indices = index.search([query_embedding], top_k)
 
     # Step 3: Combine Results
-    combined_indices = set(keyword_indices).union(vector_indices[0])
+    combined_indices = set(int(idx) for idx in keyword_indices).union(int(i) for i in vector_indices[0])
     relevant_jobs = [jobs[i] for i in combined_indices if i < len(jobs)]  # Ensure indices are valid
 
     logger.info(f"Hybrid search retrieved {len(relevant_jobs)} jobs.")
@@ -76,10 +94,9 @@ if __name__ == "__main__":
     ]
 
     # Generate embeddings and create FAISS index
-    from processor import generate_embeddings, index_jobs_in_faiss
-    embeddings = generate_embeddings(jobs)
-    dimension = embeddings.shape[1]
-    index = index_jobs_in_faiss(jobs)
+    from src.processor import index_jobs_in_faiss
+
+    index, metadata = index_jobs_in_faiss(jobs)
 
     # Perform hybrid search
     query = "Find me remote Python developer jobs."
