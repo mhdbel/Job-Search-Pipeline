@@ -26,3 +26,6 @@ email:
   smtp_server: "smtp.gmail.com"        # SMTP server for Gmail
   smtp_port: 587                       # SMTP port for Gmail (TLS)
   smtp_password: "your-app-password-or-real-password"  # Replace with your Gmail password or App Password
+
+# API keys
+openai_api_key: "your-openai-api-key"

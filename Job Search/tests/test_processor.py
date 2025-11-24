@@ -1,11 +1,18 @@
-import unittest
 import logging
-from Job_Search.src.processor import (
+import os
+import sys
+import unittest
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from src.processor import (
     clean_data,
-    normalize_text,
     create_job_fingerprint,
     generate_embeddings,
-    index_jobs_in_faiss
+    index_jobs_in_faiss,
+    normalize_text,
 )
 
 # Configure logging to be quiet during tests
@@ -69,12 +76,12 @@ class TestProcessor(unittest.TestCase):
         expected = [
             {'title': 'Good Job', 'company': 'Good Co', 'link': 'good_link'}
         ]
-        with self.assertLogs(logger='Job_Search.src.processor', level='WARNING') as cm:
+        with self.assertLogs(logger='src.processor', level='WARNING') as cm:
             self.assertEqual(clean_data(jobs), expected)
             self.assertTrue(any("Skipping job with missing essential fields" in log_msg for log_msg in cm.output))
 
     def test_clean_data_input_not_list(self):
-        with self.assertLogs(logger='Job_Search.src.processor', level='ERROR') as cm:
+        with self.assertLogs(logger='src.processor', level='ERROR') as cm:
             result = clean_data("not a list")
             self.assertEqual(result, [])
             self.assertTrue(any("expects a list of job data" in log_msg for log_msg in cm.output))
@@ -88,7 +95,7 @@ class TestProcessor(unittest.TestCase):
         expected = [
             {'title': 'Valid Job', 'company': 'Good Co', 'link': 'link1'}
         ]
-        with self.assertLogs(logger='Job_Search.src.processor', level='WARNING') as cm:
+        with self.assertLogs(logger='src.processor', level='WARNING') as cm:
             result = clean_data(jobs)
             self.assertEqual(result, expected)
             self.assertTrue(any("Skipping non-dictionary item" in log_msg for log_msg in cm.output))

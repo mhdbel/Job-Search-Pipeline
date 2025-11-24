@@ -1,7 +1,14 @@
-import unittest
 import logging
-from Job_Search.src.analyzer import analyze_jobs, hybrid_search  # Updated imports
-from Job_Search.src.processor import clean_data, index_jobs_in_faiss  # For indexing jobs
+import os
+import sys
+import unittest
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from src.analyzer import analyze_jobs, hybrid_search
+from src.processor import clean_data, index_jobs_in_faiss  # For indexing jobs
 
 # Configure logging to be quiet during tests, unless specifically needed for a test
 logging.basicConfig(level=logging.CRITICAL)
@@ -60,7 +67,7 @@ class TestAnalyzer(unittest.TestCase):
             {'title': 'Developer', 'company': 'Code LLC', 'applicants': 3, 'id': 'job8'}
         ]
         # Suppress warnings from the logger during this specific test if they are expected
-        with self.assertLogs(logger='Job_Search.src.analyzer', level='WARNING') as cm:
+        with self.assertLogs(logger='src.analyzer', level='WARNING') as cm:
             result = analyze_jobs(jobs)
             self.assertEqual(result, expected_interesting_jobs)
             # Check that warnings were logged for non-integer applicants
@@ -69,7 +76,7 @@ class TestAnalyzer(unittest.TestCase):
 
     def test_analyze_jobs_input_not_list(self):
         """Test analyze_jobs with input that is not a list."""
-        with self.assertLogs(logger='Job_Search.src.analyzer', level='ERROR') as cm:
+        with self.assertLogs(logger='src.analyzer', level='ERROR') as cm:
             result = analyze_jobs("not a list")
             self.assertEqual(result, [])
             self.assertTrue(any("expects a list of jobs" in log_msg for log_msg in cm.output))
@@ -84,7 +91,7 @@ class TestAnalyzer(unittest.TestCase):
         expected_interesting_jobs = [
             {'title': 'Valid Job', 'company': 'Good Co', 'applicants': 5, 'id': 'job9'}
         ]
-        with self.assertLogs(logger='Job_Search.src.analyzer', level='WARNING') as cm:
+        with self.assertLogs(logger='src.analyzer', level='WARNING') as cm:
             result = analyze_jobs(jobs)
             self.assertEqual(result, expected_interesting_jobs)
             self.assertTrue(any("Skipping non-dictionary job item" in log_msg for log_msg in cm.output))
